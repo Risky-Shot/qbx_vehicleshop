@@ -33,3 +33,11 @@ files {
 provide 'qb-vehicleshop'
 lua54 'yes'
 use_experimental_fxv2_oal 'yes'
+
+
+
+
+--[[
+    Test Drive has Time Limit and teleport back to shop when ends
+    Stock System for specific cars (can be restocked by order and bring in trailer)
+]]

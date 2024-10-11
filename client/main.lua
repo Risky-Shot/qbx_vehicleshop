@@ -180,13 +180,14 @@ end
 ---@param category string
 ---@param targetVehicle number
 local function openVehCatsMenu(category, targetVehicle)
-
     local categoryMenu = {}
     for i = 1, vehiclesMenu.count do
         local vehicle = vehiclesMenu.vehicles[i]
         if vehicle.category == category and vehicle.shopType == insideShop then
             vehicle.args.closestShop = insideShop
             vehicle.args.targetVehicle = targetVehicle
+            vehicle.serverEvent = 'qbx_vehicleshop:server:swapVehicle'
+
             categoryMenu[#categoryMenu + 1] = vehicle
         end
     end
@@ -699,3 +700,314 @@ CreateThread(function()
         end
     end
 end)
+
+----------------------------------------------------
+---------APL NATION---------------------------------
+
+local function clamp(value, min, max)
+    if value < min then
+        return min
+    elseif value > max then
+        return max
+    else
+        return value
+    end
+end
+
+local function lerp(a, b, t) return a * (1 - t) + b * t end
+
+-- Heading Using Lerp
+local function setEntityHeadingSmoothly(entity, targetHeading, duration)
+    local initialHeading = GetEntityHeading(entity)
+    local elapsedTime = 0
+    local interval = 0.01 -- Update every 0.01 seconds
+
+    while elapsedTime < duration do
+        local t = elapsedTime / duration
+        local currentHeading = lerp(initialHeading, targetHeading, t)
+        SetEntityHeading(entity, currentHeading)
+
+        Wait(interval * 1000)
+        elapsedTime = elapsedTime + interval
+    end
+
+    -- Ensure the entity's heading is set to the target heading
+    SetEntityHeading(entity, targetHeading)
+end
+
+function PreviewManager()
+    local self = {}
+    
+    self.vehicle = nil -- Vehicle Id
+    --self.coords = vec3(567.5121, -408.0889, -70.0132) -- Vehicle Coords
+    self.coords = vec3(-147.2409, -595.2252, 166.5759) -- Vehicle Coords
+    self.heading = nil -- Vehicle Heading
+    self.lastCoords = nil -- Store Coords Where Player was before entering preview
+
+    self.cam = nil -- Vehicle Cam
+
+    self.createCam = function()
+        -- if not self.vehicle then 
+        --     lib.print.error('No Vehicle Found')
+        --     return 
+        -- end
+
+        if self.cam then 
+            lib.print.error('Already Cam Available')
+            return 
+        end
+
+        local cam = CreateCam('DEFAULT_SCRIPTED_CAMERA', true)
+
+        self.cam = cam
+
+        SetCamCoord(cam, -143.8477, -596.6397, 167.5)
+        SetCamFov(cam, 90)
+        SetCamRot(cam, 0.0, 0.0, 65.0, 0)
+        RenderScriptCams(true, true, 250, true, true)
+    end
+
+    -- Not Sure if need to spawn it server side
+    self.spawnCar = function(model)
+        if self.vehicle and DoesEntityExist(self.vehicle) then
+            DeleteEntity(self.vehicle)
+        end
+
+        lib.requestModel(model, 10000)
+        local veh = CreateVehicle(model, self.coords.x, self.coords.y, self.coords.z, 161.3717, false, true)
+        SetModelAsNoLongerNeeded(model)
+        SetVehicleOnGroundProperly(veh)
+        SetEntityInvincible(veh, true)
+        SetVehicleDirtLevel(veh, 0.0)
+        SetVehicleDoorsLocked(veh, 10)
+        FreezeEntityPosition(veh, true)
+        SetVehicleNumberPlateText(veh, 'BUY ME')
+        SetVehicleColours(veh, 0, 0)
+
+        self.vehicle = veh
+    end
+
+    -- Rotate Car using SetEntityHeading
+    self.rotateCar = function(heading)
+        if not self.vehicle and not DoesEntityExist(self.vehicle) then return end
+
+        -- My Way
+        -- local currentHeading = GetEntityHeading(self.vehicle)
+        -- setEntityHeadingSmoothly(self.vehicle, clamp(currentHeading + heading, 0.0, 360.0), 0.2)
+
+        -- Raid Way
+        local Rot = GetEntityHeading(self.vehicle)+heading
+        setEntityHeadingSmoothly(self.vehicle, Rot % 360)
+    end
+
+    self.changePrimaryColor = function(color)
+        if not self.vehicle and not DoesEntityExist(self.vehicle) then return end
+
+        SetVehicleCustomPrimaryColour(self.vehicle, color.r, color.g, color.b)
+    end
+
+    self.changeSecondaryColor = function(color)
+        if not self.vehicle and not DoesEntityExist(self.vehicle) then return end
+
+        SetVehicleCustomSecondaryColour(self.vehicle, color.r, color.g, color.b)
+    end
+
+    self.enterPreview = function()
+        DoScreenFadeOut(1000)
+        while not IsScreenFadedOut() do
+            print('Waiting for Screen FadeOut')
+            Wait(0) 
+        end
+
+        self.lastCoords = GetEntityCoords(cache.ped)
+
+        local curTime = GetGameTimer()
+
+        SetEntityCoords(cache.ped, -141.0687, -604.4445, 167.5951)
+
+        while not HasCollisionLoadedAroundEntity(cache.ped) do
+            RequestCollisionAtCoord(-141.0687, -604.4445, 167.5951)
+            print('Waiting for collision to load Around Entity')
+            if GetGameTimer() - curTime > 1000 then
+                break
+            end
+            Wait(0)
+        end
+
+        SetEntityCoords(cache.ped, -141.0687, -604.4445, 167.5951)
+
+        FreezeEntityPosition(cache.ped, true)
+
+        Wait(1000)
+
+        self.createCam()
+
+        Wait(500)
+
+        DoScreenFadeIn(1000)
+    end
+
+    self.leavePreview = function()
+        DoScreenFadeOut(1000)
+        while not IsScreenFadedOut() do Wait(0) end
+        -- Destroy Cam
+        RenderScriptCams(false, true, 250, true, false)
+        if self.cam then 
+            DestroyCam(self.cam, true) 
+            self.cam = nil
+        end
+
+        -- Delete Vehicle 
+        if self.vehicle and DoesEntityExist(self.vehicle) then
+            DeleteEntity(self.vehicle)
+        end
+
+        -- Teleport Back to Last Coords
+        if not self.coords then
+            lib.print.error("Failed To Find Last Coords. Please Relog.")
+        end
+
+        local curTime = GetGameTimer()
+
+        SetEntityCoords(cache.ped, self.lastCoords.x, self.lastCoords.y, self.lastCoords.z)
+
+        while not HasCollisionLoadedAroundEntity(cache.ped) do
+            RequestCollisionAtCoord(self.lastCoords.x, self.lastCoords.y, self.lastCoords.z)
+            if GetGameTimer() - curTime > 1000 then
+                break
+            end
+            Wait(0)
+        end
+
+        SetEntityCoords(cache.ped, self.lastCoords.x, self.lastCoords.y, self.lastCoords.z)
+
+        FreezeEntityPosition(cache.ped, false)
+
+        DoScreenFadeIn(1000)
+    end
+
+    return self
+end
+
+local Preview = PreviewManager()
+
+-----------------------------------------------------------------------
+------------CATALOGUE DATA---------------------------------------------
+-----------------------------------------------------------------------
+-- Returns Speed / Braking / Handling / Acceleration Data (keep a clamp of 0-100 on all data as few models have stats above 100 somehow)
+-- Not sure how accurate these are...seems promising to me
+local function GetPerformanceStats(vehicle)
+    local data = {}
+    data.speed = math.ceil((GetVehicleModelEstimatedMaxSpeed(vehicle)*4.605936)/520*100)
+    data.brakes = math.ceil(GetVehicleModelMaxBraking(vehicle)/2*100)
+    local handling1 = GetVehicleModelMaxBraking(vehicle)
+    local handling2 = GetVehicleModelMaxBrakingMaxMods(vehicle)
+    local handling3 = GetVehicleModelMaxTraction(vehicle)
+    data.handling = math.ceil(((handling1+handling2) * handling3)/10*100)
+    data.acceleration = math.ceil(GetVehicleModelAcceleration(vehicle) * 200)
+    return data
+end
+
+-- Return Vehicles Data for that shop
+--[[
+Vehicles -
+    Compacts
+        Vehicle1
+            name
+            price
+            stats
+        Vehicle2
+        vehicle3
+    Super
+        Vehicle1
+        Vehicle2
+        Vehicle3
+
+]]
+
+local function VehiclesData(insideShop)
+    local sortedCategories = {}
+    local categories = sharedConfig.shops[insideShop].categories
+
+
+    for k, v in pairs(categories) do
+        sortedCategories[#sortedCategories + 1] = {
+            category = k,
+            label = v
+        }
+    end
+
+    table.sort(sortedCategories, function(a, b)
+        return string.upper(a.label) < string.upper(b.label)
+    end)
+
+    local vehicles = {}
+
+    for j = 1, #sortedCategories do
+        vehicles[sortedCategories[j].category] = {}
+        for i = 1, vehiclesMenu.count do
+            local vehicle = vehiclesMenu.vehicles[i]
+            if vehicle.category == sortedCategories[j].category and vehicle.shopType == insideShop then
+                local data = {}
+                -- Add Data Here if neede to be sent to UI
+                data.category = vehicle.category
+                data.name = vehicle.name
+                data.manufacturer = vehicle.manufacturer
+                data.price = vehicle.description -- is in string
+                data.closestShop = insideShop
+                data.controls = GetPerformanceStats(vehicle.args.toVehicle)
+                data.model = vehicle.args.toVehicle
+                data.inStock = true -- in future change by calculation from database
+                vehicles[sortedCategories[j].category][#vehicles[sortedCategories[j].category] + 1] = data
+            end
+        end
+    end
+
+    return vehicles
+end
+
+--------------------------------------------------------------------------------
+
+RegisterNUICallback("spawnPreviewVehicle", function(model)
+    Preview.spawnCar(model)
+end)
+
+-- This delete cam, vehicle and teleport back ped to it's last coords (if player crash and take last location then he will be teleported to showcase place.)
+RegisterNUICallback("exitPreview", function()
+    -- Close UI here
+    Preview.leavePreview()
+end)
+
+RegisterNUICallback("rotateCar", function(degree)
+    Preview.rotateCar(degree)
+end)
+
+-- color should be of color.r, color.g color.b format
+RegisterNUICallback("changePrimaryVehicleColor", function(color)
+    Preview.changePrimaryColor(color)
+end)
+
+-- color should be of color.r, color.g color.b format
+RegisterNUICallback("changeSecondaryVehicleColor", function(color)
+    Preview.changeSecondaryColor(color)
+end)
+-------------------------------------------------------
+
+RegisterCommand("vehicleCatalogue", function(_, args)
+    -- if not insideShop then 
+    --     lib.print.error('You are not insideShop zone.')
+    --     return 
+    -- end
+
+    -- --PreviewHandler()
+    -- -- Function To Enter Preview (Add Your UI launch in this function of class of after this function)
+    
+    -- openVehicleCategoryMenuAPL(insideShop)
+
+    -- Preview.enterPreview()
+    local stats = GetPerformanceStats(args[1])
+    print(json.encode(stats))
+
+    --print(json.encode(VehiclesData('pdm'), {indent = true}))
+end, false)
+

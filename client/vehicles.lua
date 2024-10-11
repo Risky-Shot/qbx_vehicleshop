@@ -10,12 +10,13 @@ local function insertVehicle(vehicleData, shopType)
     vehicles[count] = {
         shopType = shopType,
         category = vehicleData.category,
-
         title = ('%s %s'):format(vehicleData.brand, vehicleData.name),
-        description = ('%s%s'):format(locale('menus.veh_price'), groupdigits(vehicleData.price)),
-        serverEvent = 'qbx_vehicleshop:server:swapVehicle',
+        manufacturer = vehicleData.brand,
+        name = vehicleData.name,
+        --description = ('%s%s'):format(locale('menus.veh_price'), groupdigits(vehicleData.price)),
+        description = groupdigits(vehicleData.price),
         args = {
-            toVehicle = vehicleData.model,
+            toVehicle = vehicleData.model
         }
     }
 end
