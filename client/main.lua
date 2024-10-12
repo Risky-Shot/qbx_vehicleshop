@@ -192,6 +192,10 @@ local function openVehCatsMenu(category, targetVehicle)
         end
     end
 
+    table.sort(categoryMenu, function(a, b)
+        return string.upper(a.title) < string.upper(b.title)
+    end)
+
     lib.registerContext({
         id = 'openVehCats',
         title = sharedConfig.shops[insideShop].categories[category],

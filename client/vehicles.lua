@@ -14,7 +14,7 @@ local function insertVehicle(vehicleData, shopType)
         manufacturer = vehicleData.brand,
         name = vehicleData.name,
         --description = ('%s%s'):format(locale('menus.veh_price'), groupdigits(vehicleData.price)),
-        description = groupdigits(vehicleData.price),
+        description = ('$ %s'):format(groupdigits(vehicleData.price)),
         args = {
             toVehicle = vehicleData.model
         }
